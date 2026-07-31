@@ -1,86 +1,117 @@
 #include "sensor_manager.h"
 #include "config.h"
 
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_SHT31.h>
+
 /*
  * FleetGuard Sensor Manager
  *
- * This module handles:
- * - Sensor initialization
- * - Temperature/humidity acquisition
- * - Sensor data validation
- * - Sensor failure detection
+ * Sensor:
+ * SHT31
  *
- * NOTE:
- * The actual sensor library and sensor model will be selected
- * during hardware integration.
+ * Interface:
+ * I2C
  *
- * The current implementation provides the firmware interface
- * and validation structure without assuming a specific sensor.
+ * Responsibilities:
+ * - Initialize SHT31
+ * - Read temperature
+ * - Read relative humidity
+ * - Validate sensor data
+ * - Detect sensor communication failure
  */
 
-// Store the latest sensor values
-static float lastTemperature = 0.0f;
-static float lastHumidity = 0.0f;
+static Adafruit_SHT31 sht31 = Adafruit_SHT31();
+
 static bool sensorInitialized = false;
 
 
+// ---------------------------------------------------------
+// Sensor Initialization
+// ---------------------------------------------------------
+
 bool sensorManagerBegin()
 {
-    /*
-     * Sensor hardware initialization will be implemented here
-     * after the final temperature/humidity sensor is selected.
-     *
-     * Examples:
-     * - Initialize I2C sensor
-     * - Initialize digital sensor
-     * - Verify sensor communication
-     */
+    // Initialize I2C bus
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
-    sensorInitialized = true;
-
-    return sensorInitialized;
-}
-
-
-bool sensorManagerRead(SensorData& data)
-{
-    /*
-     * If the sensor has not been initialized,
-     * the reading is considered invalid.
-     */
-    if (!sensorInitialized)
+    // Initialize SHT31
+    if (!sht31.begin(SHT31_I2C_ADDRESS))
     {
-        data.valid = false;
+        Serial.println("ERROR: SHT31 sensor not detected.");
+
+        sensorInitialized = false;
+
         return false;
     }
 
-    /*
-     * TODO:
-     * Replace these demonstration values with actual
-     * sensor-library readings.
-     *
-     * Example:
-     *
-     * data.temperature = sensor.readTemperature();
-     * data.humidity = sensor.readHumidity();
-     */
+    sensorInitialized = true;
 
-    data.temperature = lastTemperature;
-    data.humidity = lastHumidity;
+    Serial.println("SHT31 sensor initialized.");
 
-    /*
-     * Validate the acquired values.
-     */
-    data.valid = validateSensorData(data);
-
-    return data.valid;
+    return true;
 }
 
+
+// ---------------------------------------------------------
+// Sensor Reading
+// ---------------------------------------------------------
+
+bool sensorManagerRead(SensorData& data)
+{
+    // Default to invalid
+    data.valid = false;
+
+    if (!sensorInitialized)
+    {
+        Serial.println("ERROR: Sensor is not initialized.");
+
+        return false;
+    }
+
+    // Read temperature
+    float temperature = sht31.readTemperature();
+
+    // Read relative humidity
+    float humidity = sht31.readHumidity();
+
+    /*
+     * SHT31 returns NAN if the reading fails.
+     */
+    if (isnan(temperature) || isnan(humidity))
+    {
+        Serial.println("ERROR: Invalid SHT31 reading.");
+
+        return false;
+    }
+
+    // Store readings
+    data.temperature = temperature;
+    data.humidity = humidity;
+
+    // Validate readings
+    data.valid = validateSensorData(data);
+
+    if (!data.valid)
+    {
+        Serial.println("ERROR: Sensor data outside valid range.");
+
+        return false;
+    }
+
+    return true;
+}
+
+
+// ---------------------------------------------------------
+// Sensor Data Validation
+// ---------------------------------------------------------
 
 bool validateSensorData(const SensorData& data)
 {
     /*
-     * Check temperature limits.
+     * Temperature engineering validation range.
      */
     if (data.temperature < MIN_VALID_TEMPERATURE ||
         data.temperature > MAX_VALID_TEMPERATURE)
@@ -89,7 +120,7 @@ bool validateSensorData(const SensorData& data)
     }
 
     /*
-     * Check humidity limits.
+     * Relative humidity must be between 0% and 100%.
      */
     if (data.humidity < MIN_VALID_HUMIDITY ||
         data.humidity > MAX_VALID_HUMIDITY)
