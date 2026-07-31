@@ -4,24 +4,30 @@
 /*
  * FleetGuard Condition Classifier
  *
- * Classification is based on both temperature and humidity.
+ * Classification is based on temperature and relative humidity.
  *
- * Hysteresis prevents rapid state changes when sensor readings
- * fluctuate around threshold values.
+ * Either parameter can cause the system to move to a more
+ * severe condition.
+ *
+ * Hysteresis prevents rapid state changes when sensor values
+ * fluctuate around threshold boundaries.
  *
  * Engineering demonstration values are defined in config.h.
  */
+
 
 ConditionState classifyCondition(
     float temperature,
     float humidity,
     ConditionState previousState)
 {
+    // -----------------------------------------------------
+    // CRITICAL STATE
+    // -----------------------------------------------------
+
     /*
-     * CRITICAL STATE
-     *
-     * If either temperature OR humidity reaches the critical
-     * entry threshold, the system enters CRITICAL.
+     * Enter CRITICAL if either temperature or humidity
+     * reaches its critical entry threshold.
      */
     if (temperature >= TEMPERATURE_CRITICAL_ENTER ||
         humidity >= HUMIDITY_CRITICAL_ENTER)
@@ -29,12 +35,11 @@ ConditionState classifyCondition(
         return ConditionState::CRITICAL;
     }
 
+
     /*
-     * If the system is already CRITICAL, do not immediately
-     * leave the state when the value drops slightly.
-     *
-     * Both parameters must be below their critical exit
-     * thresholds before returning to WARNING.
+     * If already CRITICAL, remain CRITICAL until BOTH
+     * temperature and humidity have recovered below their
+     * respective critical exit thresholds.
      */
     if (previousState == ConditionState::CRITICAL)
     {
@@ -47,11 +52,14 @@ ConditionState classifyCondition(
         return ConditionState::WARNING;
     }
 
+
+    // -----------------------------------------------------
+    // WARNING STATE
+    // -----------------------------------------------------
+
     /*
-     * WARNING STATE
-     *
-     * If either parameter reaches the warning entry threshold,
-     * enter WARNING.
+     * Enter WARNING if either temperature or humidity
+     * reaches its warning entry threshold.
      */
     if (temperature >= TEMPERATURE_WARNING_ENTER ||
         humidity >= HUMIDITY_WARNING_ENTER)
@@ -59,10 +67,11 @@ ConditionState classifyCondition(
         return ConditionState::WARNING;
     }
 
+
     /*
-     * If the system is already WARNING, require both parameters
-     * to fall below their warning exit thresholds before
-     * returning to NORMAL.
+     * If already WARNING, remain WARNING until BOTH
+     * temperature and humidity have recovered below their
+     * respective warning exit thresholds.
      */
     if (previousState == ConditionState::WARNING)
     {
@@ -75,13 +84,18 @@ ConditionState classifyCondition(
         return ConditionState::NORMAL;
     }
 
-    /*
-     * If no warning or critical threshold is active,
-     * the condition is NORMAL.
-     */
+
+    // -----------------------------------------------------
+    // NORMAL STATE
+    // -----------------------------------------------------
+
     return ConditionState::NORMAL;
 }
 
+
+// ---------------------------------------------------------
+// Condition State String
+// ---------------------------------------------------------
 
 const char* conditionStateToString(ConditionState state)
 {
