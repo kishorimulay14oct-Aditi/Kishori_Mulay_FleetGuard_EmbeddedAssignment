@@ -23,6 +23,7 @@
 #include "alert_manager.h"
 #include "event_logger.h"
 #include "configuration_manager.h"
+#include "connectivity_manager.h"
 
 // Current system state
 static ConditionState currentState = ConditionState::NORMAL;
@@ -43,6 +44,8 @@ static unsigned long lastSampleTime = 0;
 
 void setup()
 {
+    // Maintain optional Wi-Fi/MQTT connectivity
+    maintainConnectivity();
     Serial.begin(115200);
 
     delay(500);
@@ -82,6 +85,18 @@ void setup()
     {
         Serial.println("ERROR: Event Logger initialization failed.");
     }
+   
+    // Initialize connectivity manager
+    if (!connectivityManagerBegin())
+    {
+        Serial.println("WARNING: Connectivity Manager failed.");
+    }
+
+    // Attempt Wi-Fi connection
+    connectToWiFi();
+
+    // Record system startup
+    logEvent(EventType::SYSTEM_START);
 
     // Record system startup
     logEvent(EventType::SYSTEM_START);
@@ -193,11 +208,29 @@ void loop()
         // Update Local Alerts
         // -------------------------------------------------
 
+                // -------------------------------------------------
+        // Update Local Alerts
+        // -------------------------------------------------
+
         updateAlerts(
             currentState,
             sensorData.temperature,
             sensorData.humidity
         );
+
+        // -------------------------------------------------
+        // Optional MQTT Telemetry
+        // -------------------------------------------------
+
+        publishTelemetry(
+            sensorData.temperature,
+            sensorData.humidity,
+            conditionStateToString(currentState)
+        );
+
+        // -------------------------------------------------
+        // Debug Information
+        // -------------------------------------------------
 
         // -------------------------------------------------
         // Debug Information
