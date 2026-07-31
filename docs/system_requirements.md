@@ -123,20 +123,20 @@ When a sensor failure is detected, the system shall:
 
 ---
 
-## FR-05: Environmental Condition Classification
+### FR-05: Environmental Condition Classification
 
 The system shall classify environmental conditions into three states:
 
-### Normal
+#### Normal
 
 All monitored parameters are within their configured safe operating
 range.
 
-### Warning
+#### Warning
 
 One or more monitored parameters are approaching an unsafe limit.
 
-### Critical
+#### Critical
 
 One or more monitored parameters exceed the configured critical
 threshold.
@@ -144,6 +144,131 @@ threshold.
 The classification thresholds shall be configurable.
 
 ---
+
+### FR-05.1: Threshold Hysteresis
+
+The system shall implement hysteresis around warning and critical
+thresholds to prevent rapid switching between operating states when a
+measured value fluctuates near a threshold.
+
+Separate threshold values shall be used for entering and leaving an
+operating state.
+
+For the upper temperature warning threshold:
+
+- Enter WARNING when temperature >= 8.0°C
+- Return to NORMAL when temperature <= 7.5°C
+
+For the upper temperature critical threshold:
+
+- Enter CRITICAL when temperature >= 10.0°C
+- Return from CRITICAL to WARNING when temperature <= 9.5°C
+
+For the lower temperature limit:
+
+- Enter WARNING when temperature <= 2.0°C
+- Return to NORMAL when temperature >= 2.5°C
+- Enter CRITICAL when temperature <= 0.0°C
+- Return from CRITICAL to WARNING when temperature >= 0.5°C
+
+The same hysteresis principle shall be applied to humidity thresholds
+where required.
+
+The threshold and hysteresis values shall be configurable.
+
+The purpose of hysteresis is to prevent alarm/status chattering caused
+by sensor noise and small environmental fluctuations around threshold
+values.
+
+---
+# 6. Threshold Strategy
+
+The proof-of-concept shall use configurable engineering demonstration
+thresholds.
+
+The system shall use hysteresis so that the operating state does not
+rapidly change when a measured value fluctuates around a threshold.
+
+## 6.1 Temperature Thresholds
+
+The following values are proposed for demonstration:
+
+| State Transition | Temperature |
+|---|---:|
+| NORMAL → WARNING | >= 8.0°C |
+| WARNING → NORMAL | <= 7.5°C |
+| WARNING → CRITICAL | >= 10.0°C |
+| CRITICAL → WARNING | <= 9.5°C |
+| NORMAL → WARNING (Low) | <= 2.0°C |
+| WARNING → NORMAL (Low) | >= 2.5°C |
+| WARNING → CRITICAL (Low) | <= 0.0°C |
+| CRITICAL → WARNING (Low) | >= 0.5°C |
+
+These are engineering demonstration values only.
+
+## 6.2 Hysteresis Example
+
+For the upper warning threshold:
+
+```text
+                 Temperature >= 8.0°C
+NORMAL --------------------------------> WARNING
+   ^                                       |
+   |                                       |
+   | Temperature <= 7.5°C                 |
+   +---------------------------------------+
+
+For the critical threshold:
+
+                 Temperature >= 10.0°C
+WARNING -------------------------------> CRITICAL
+   ^                                       |
+   |                                       |
+   | Temperature <= 9.5°C                 |
+   +---------------------------------------+
+
+Example:
+
+Temperature:
+7.9 → 8.1 → 7.9 → 7.7 → 7.5°C
+
+State:
+NORMAL → WARNING → WARNING → WARNING → NORMAL
+
+This prevents alarm/status chattering.
+
+6.3 Humidity Thresholds
+
+Humidity warning and critical thresholds shall also support hysteresis.
+
+The exact values shall be selected based on the target application,
+sensor accuracy, environmental requirements, and product requirements.
+
+The threshold values shall be configurable rather than permanently
+hard-coded into the classification algorithm.
+
+6.4 Production Threshold Considerations
+
+Actual production thresholds shall be determined from:
+
+Product requirements
+Customer requirements
+Storage and transportation conditions
+Sensor accuracy
+Sensor noise characteristics
+Regulatory requirements
+Environmental qualification results
+
+The proof-of-concept values must therefore be replaced with
+application-specific limits before production deployment.
+
+
+### Then find the table under:
+
+```text
+# 7. Requirement-to-Implementation Mapping
+
+| Threshold hysteresis | Condition Classifier + Configuration Manager |
 
 ## FR-06: Local Alert Generation
 
