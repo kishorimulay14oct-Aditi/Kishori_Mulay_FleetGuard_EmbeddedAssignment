@@ -4,25 +4,45 @@
  * Main Application
  *
  * Responsibilities:
- * - System initialization
- * - Configuration initialization
- * - Sensor initialization
- * - Periodic monitoring
- * - Coordination of firmware modules
+ * - Initialize firmware modules
+ * - Load configuration
+ * - Read environmental sensors
+ * - Validate sensor data
+ * - Classify environmental condition
+ * - Apply hysteresis
+ * - Control local alerts
+ * - Log important events
+ * - Maintain periodic monitoring
  */
 
 #include <Arduino.h>
 
-// Future module headers
-// #include "sensor_manager.h"
-// #include "condition_classifier.h"
-// #include "alert_manager.h"
-// #include "event_logger.h"
-// #include "configuration_manager.h"
+#include "config.h"
+#include "sensor_manager.h"
+#include "condition_classifier.h"
+#include "alert_manager.h"
+#include "event_logger.h"
+#include "configuration_manager.h"
+
+// Current system state
+static ConditionState currentState = ConditionState::NORMAL;
+
+// Current configuration
+static FleetGuardConfig systemConfig;
+
+// Previous sensor validity
+static bool previousSensorValid = true;
+
+// Timing
+static unsigned long lastSampleTime = 0;
+
+
+// ---------------------------------------------------------
+// Setup
+// ---------------------------------------------------------
 
 void setup()
 {
-    // Initialize serial debugging
     Serial.begin(115200);
 
     delay(500);
@@ -33,40 +53,159 @@ void setup()
     Serial.println(" Starting system...");
     Serial.println("=================================");
 
-    /*
-     * Future initialization sequence:
-     *
-     * 1. Initialize configuration manager
-     * 2. Load stored configuration
-     * 3. Initialize sensor manager
-     * 4. Initialize OLED
-     * 5. Initialize LED
-     * 6. Initialize buzzer
-     * 7. Initialize event logger
-     * 8. Perform sensor validation
-     * 9. Start monitoring
-     */
+    // Initialize configuration manager
+    if (!configurationManagerBegin())
+    {
+        Serial.println("ERROR: Configuration Manager failed.");
+    }
+
+    // Load configuration
+    if (!loadConfiguration(systemConfig))
+    {
+        Serial.println("ERROR: Configuration loading failed.");
+    }
+
+    // Initialize sensor manager
+    if (!sensorManagerBegin())
+    {
+        Serial.println("ERROR: Sensor initialization failed.");
+    }
+
+    // Initialize alert manager
+    if (!alertManagerBegin())
+    {
+        Serial.println("ERROR: Alert Manager initialization failed.");
+    }
+
+    // Initialize event logger
+    if (!eventLoggerBegin())
+    {
+        Serial.println("ERROR: Event Logger initialization failed.");
+    }
+
+    // Record system startup
+    logEvent(EventType::SYSTEM_START);
+
+    // Initialize sampling timer
+    lastSampleTime = millis();
 
     Serial.println("System initialization complete.");
 }
 
+
+// ---------------------------------------------------------
+// Main Monitoring Loop
+// ---------------------------------------------------------
+
 void loop()
 {
+    unsigned long currentTime = millis();
+
     /*
-     * Future monitoring sequence:
-     *
-     * 1. Read temperature and humidity
-     * 2. Validate sensor data
-     * 3. Classify environmental condition
-     * 4. Apply threshold hysteresis
-     * 5. Update OLED
-     * 6. Update LED
-     * 7. Control buzzer
-     * 8. Log important events
-     * 9. Wait for next sampling interval
+     * Execute monitoring only when the configured
+     * sampling interval has elapsed.
      */
+    if (currentTime - lastSampleTime >=
+        systemConfig.samplingIntervalMs)
+    {
+        lastSampleTime = currentTime;
 
-    Serial.println("FleetGuard monitoring loop running...");
+        SensorData sensorData;
 
-    delay(5000);
+        // Read sensor
+        bool sensorReadSuccessful =
+            sensorManagerRead(sensorData);
+
+        // -------------------------------------------------
+        // Sensor Failure Handling
+        // -------------------------------------------------
+
+        if (!sensorReadSuccessful || !sensorData.valid)
+        {
+            Serial.println("ERROR: Invalid sensor data.");
+
+            // Show sensor fault
+            showSensorFault();
+
+            // Log failure only when entering fault state
+            if (previousSensorValid)
+            {
+                logEvent(EventType::SENSOR_FAILURE);
+            }
+
+            previousSensorValid = false;
+
+            return;
+        }
+
+        // -------------------------------------------------
+        // Sensor Recovery
+        // -------------------------------------------------
+
+        if (!previousSensorValid)
+        {
+            logEvent(EventType::SENSOR_RECOVERY);
+
+            previousSensorValid = true;
+        }
+
+        // -------------------------------------------------
+        // Condition Classification
+        // -------------------------------------------------
+
+        ConditionState previousState = currentState;
+
+        currentState = classifyCondition(
+            sensorData.temperature,
+            sensorData.humidity,
+            previousState
+        );
+
+        // -------------------------------------------------
+        // Detect State Changes
+        // -------------------------------------------------
+
+        if (currentState != previousState)
+        {
+            if (previousState == ConditionState::NORMAL &&
+                currentState == ConditionState::WARNING)
+            {
+                logEvent(EventType::NORMAL_TO_WARNING);
+            }
+            else if (previousState == ConditionState::WARNING &&
+                     currentState == ConditionState::CRITICAL)
+            {
+                logEvent(EventType::WARNING_TO_CRITICAL);
+            }
+            else if (previousState == ConditionState::CRITICAL &&
+                     currentState == ConditionState::WARNING)
+            {
+                logEvent(EventType::CRITICAL_TO_WARNING);
+            }
+            else if (previousState == ConditionState::WARNING &&
+                     currentState == ConditionState::NORMAL)
+            {
+                logEvent(EventType::WARNING_TO_NORMAL);
+            }
+        }
+
+        // -------------------------------------------------
+        // Update Local Alerts
+        // -------------------------------------------------
+
+        updateAlerts(
+            currentState,
+            sensorData.temperature,
+            sensorData.humidity
+        );
+
+        // -------------------------------------------------
+        // Debug Information
+        // -------------------------------------------------
+
+        Serial.print("Current State: ");
+        Serial.println(
+            conditionStateToString(currentState)
+        );
+    }
 }
