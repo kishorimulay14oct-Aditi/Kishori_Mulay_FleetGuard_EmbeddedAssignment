@@ -13,6 +13,7 @@
  * - Control local alerts
  * - Log important events
  * - Maintain periodic monitoring
+ * - Maintain optional Wi-Fi/MQTT connectivity
  */
 
 #include <Arduino.h>
@@ -25,16 +26,17 @@
 #include "configuration_manager.h"
 #include "connectivity_manager.h"
 
-// Current system state
+
+// ---------------------------------------------------------
+// Global State
+// ---------------------------------------------------------
+
 static ConditionState currentState = ConditionState::NORMAL;
 
-// Current configuration
 static FleetGuardConfig systemConfig;
 
-// Previous sensor validity
 static bool previousSensorValid = true;
 
-// Timing
 static unsigned long lastSampleTime = 0;
 
 
@@ -44,8 +46,7 @@ static unsigned long lastSampleTime = 0;
 
 void setup()
 {
-    // Maintain optional Wi-Fi/MQTT connectivity
-    maintainConnectivity();
+    // Initialize serial debugging first
     Serial.begin(115200);
 
     delay(500);
@@ -56,52 +57,77 @@ void setup()
     Serial.println(" Starting system...");
     Serial.println("=================================");
 
-    // Initialize configuration manager
+
+    // -----------------------------------------------------
+    // Configuration Manager
+    // -----------------------------------------------------
+
     if (!configurationManagerBegin())
     {
         Serial.println("ERROR: Configuration Manager failed.");
     }
 
-    // Load configuration
     if (!loadConfiguration(systemConfig))
     {
         Serial.println("ERROR: Configuration loading failed.");
     }
 
-    // Initialize sensor manager
+
+    // -----------------------------------------------------
+    // Sensor Manager
+    // -----------------------------------------------------
+
     if (!sensorManagerBegin())
     {
         Serial.println("ERROR: Sensor initialization failed.");
     }
 
-    // Initialize alert manager
+
+    // -----------------------------------------------------
+    // Alert Manager
+    // -----------------------------------------------------
+
     if (!alertManagerBegin())
     {
         Serial.println("ERROR: Alert Manager initialization failed.");
     }
 
-    // Initialize event logger
+
+    // -----------------------------------------------------
+    // Event Logger
+    // -----------------------------------------------------
+
     if (!eventLoggerBegin())
     {
         Serial.println("ERROR: Event Logger initialization failed.");
     }
-   
-    // Initialize connectivity manager
+
+
+    // -----------------------------------------------------
+    // Connectivity Manager
+    // -----------------------------------------------------
+
     if (!connectivityManagerBegin())
     {
         Serial.println("WARNING: Connectivity Manager failed.");
     }
 
-    // Attempt Wi-Fi connection
+    // Network connectivity is optional.
+    // Local monitoring must continue even if Wi-Fi is unavailable.
     connectToWiFi();
 
-    // Record system startup
+
+    // -----------------------------------------------------
+    // Record System Startup
+    // -----------------------------------------------------
+
     logEvent(EventType::SYSTEM_START);
 
-    // Record system startup
-    logEvent(EventType::SYSTEM_START);
 
-    // Initialize sampling timer
+    // -----------------------------------------------------
+    // Initialize Sampling Timer
+    // -----------------------------------------------------
+
     lastSampleTime = millis();
 
     Serial.println("System initialization complete.");
@@ -116,129 +142,149 @@ void loop()
 {
     unsigned long currentTime = millis();
 
-    /*
-     * Execute monitoring only when the configured
-     * sampling interval has elapsed.
-     */
-    if (currentTime - lastSampleTime >=
+
+    // -----------------------------------------------------
+    // Maintain Optional Connectivity
+    // -----------------------------------------------------
+
+    maintainConnectivity();
+
+
+    // -----------------------------------------------------
+    // Sampling Interval
+    // -----------------------------------------------------
+
+    if (currentTime - lastSampleTime <
         systemConfig.samplingIntervalMs)
     {
-        lastSampleTime = currentTime;
-
-        SensorData sensorData;
-
-        // Read sensor
-        bool sensorReadSuccessful =
-            sensorManagerRead(sensorData);
-
-        // -------------------------------------------------
-        // Sensor Failure Handling
-        // -------------------------------------------------
-
-        if (!sensorReadSuccessful || !sensorData.valid)
-        {
-            Serial.println("ERROR: Invalid sensor data.");
-
-            // Show sensor fault
-            showSensorFault();
-
-            // Log failure only when entering fault state
-            if (previousSensorValid)
-            {
-                logEvent(EventType::SENSOR_FAILURE);
-            }
-
-            previousSensorValid = false;
-
-            return;
-        }
-
-        // -------------------------------------------------
-        // Sensor Recovery
-        // -------------------------------------------------
-
-        if (!previousSensorValid)
-        {
-            logEvent(EventType::SENSOR_RECOVERY);
-
-            previousSensorValid = true;
-        }
-
-        // -------------------------------------------------
-        // Condition Classification
-        // -------------------------------------------------
-
-        ConditionState previousState = currentState;
-
-        currentState = classifyCondition(
-            sensorData.temperature,
-            sensorData.humidity,
-            previousState
-        );
-
-        // -------------------------------------------------
-        // Detect State Changes
-        // -------------------------------------------------
-
-        if (currentState != previousState)
-        {
-            if (previousState == ConditionState::NORMAL &&
-                currentState == ConditionState::WARNING)
-            {
-                logEvent(EventType::NORMAL_TO_WARNING);
-            }
-            else if (previousState == ConditionState::WARNING &&
-                     currentState == ConditionState::CRITICAL)
-            {
-                logEvent(EventType::WARNING_TO_CRITICAL);
-            }
-            else if (previousState == ConditionState::CRITICAL &&
-                     currentState == ConditionState::WARNING)
-            {
-                logEvent(EventType::CRITICAL_TO_WARNING);
-            }
-            else if (previousState == ConditionState::WARNING &&
-                     currentState == ConditionState::NORMAL)
-            {
-                logEvent(EventType::WARNING_TO_NORMAL);
-            }
-        }
-
-        // -------------------------------------------------
-        // Update Local Alerts
-        // -------------------------------------------------
-
-                // -------------------------------------------------
-        // Update Local Alerts
-        // -------------------------------------------------
-
-        updateAlerts(
-            currentState,
-            sensorData.temperature,
-            sensorData.humidity
-        );
-
-        // -------------------------------------------------
-        // Optional MQTT Telemetry
-        // -------------------------------------------------
-
-        publishTelemetry(
-            sensorData.temperature,
-            sensorData.humidity,
-            conditionStateToString(currentState)
-        );
-
-        // -------------------------------------------------
-        // Debug Information
-        // -------------------------------------------------
-
-        // -------------------------------------------------
-        // Debug Information
-        // -------------------------------------------------
-
-        Serial.print("Current State: ");
-        Serial.println(
-            conditionStateToString(currentState)
-        );
+        return;
     }
+
+    lastSampleTime = currentTime;
+
+
+    // -----------------------------------------------------
+    // Read Sensor
+    // -----------------------------------------------------
+
+    SensorData sensorData;
+
+    bool sensorReadSuccessful =
+        sensorManagerRead(sensorData);
+
+
+    // -----------------------------------------------------
+    // Sensor Failure Handling
+    // -----------------------------------------------------
+
+    if (!sensorReadSuccessful || !sensorData.valid)
+    {
+        Serial.println("ERROR: Invalid sensor data.");
+
+        showSensorFault();
+
+        // Log failure only when entering the fault state
+        if (previousSensorValid)
+        {
+            logEvent(EventType::SENSOR_FAILURE);
+        }
+
+        previousSensorValid = false;
+
+        return;
+    }
+
+
+    // -----------------------------------------------------
+    // Sensor Recovery
+    // -----------------------------------------------------
+
+    if (!previousSensorValid)
+    {
+        logEvent(EventType::SENSOR_RECOVERY);
+
+        previousSensorValid = true;
+    }
+
+
+    // -----------------------------------------------------
+    // Condition Classification
+    // -----------------------------------------------------
+
+    ConditionState previousState = currentState;
+
+    currentState = classifyCondition(
+        sensorData.temperature,
+        sensorData.humidity,
+        previousState
+    );
+
+
+    // -----------------------------------------------------
+    // Detect State Changes
+    // -----------------------------------------------------
+
+    if (currentState != previousState)
+    {
+        if (previousState == ConditionState::NORMAL &&
+            currentState == ConditionState::WARNING)
+        {
+            logEvent(EventType::NORMAL_TO_WARNING);
+        }
+        else if (previousState == ConditionState::WARNING &&
+                 currentState == ConditionState::CRITICAL)
+        {
+            logEvent(EventType::WARNING_TO_CRITICAL);
+        }
+        else if (previousState == ConditionState::CRITICAL &&
+                 currentState == ConditionState::WARNING)
+        {
+            logEvent(EventType::CRITICAL_TO_WARNING);
+        }
+        else if (previousState == ConditionState::WARNING &&
+                 currentState == ConditionState::NORMAL)
+        {
+            logEvent(EventType::WARNING_TO_NORMAL);
+        }
+    }
+
+
+    // -----------------------------------------------------
+    // Update Local Alerts
+    // -----------------------------------------------------
+
+    updateAlerts(
+        currentState,
+        sensorData.temperature,
+        sensorData.humidity
+    );
+
+
+    // -----------------------------------------------------
+    // Optional MQTT Telemetry
+    // -----------------------------------------------------
+
+    publishTelemetry(
+        sensorData.temperature,
+        sensorData.humidity,
+        conditionStateToString(currentState)
+    );
+
+
+    // -----------------------------------------------------
+    // Debug Information
+    // -----------------------------------------------------
+
+    Serial.print("Temperature: ");
+    Serial.print(sensorData.temperature);
+    Serial.println(" C");
+
+    Serial.print("Humidity: ");
+    Serial.print(sensorData.humidity);
+    Serial.println(" %RH");
+
+    Serial.print("Current State: ");
+    Serial.println(
+        conditionStateToString(currentState)
+    );
 }
