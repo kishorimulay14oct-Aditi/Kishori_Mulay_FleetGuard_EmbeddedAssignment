@@ -1,0 +1,31 @@
+# ---------------------------------------------------------
+# FleetGuard Git Ignore Rules
+# ---------------------------------------------------------
+
+# PlatformIO
+.pio/
+.piolibdeps/
+.vscode/
+
+# Build output
+build/
+dist/
+
+# Local/private configuration
+firmware/include/config.local.h
+firmware/include/secrets.h
+firmware/src/secrets.cpp
+
+# Environment files
+.env
+.env.*
+
+# IDE / OS files
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Debug/log files
+*.log
+serial_output.txt
