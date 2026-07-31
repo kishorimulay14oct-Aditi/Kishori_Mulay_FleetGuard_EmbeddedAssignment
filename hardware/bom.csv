@@ -1,0 +1,12 @@
+Item No,Component,Quantity,Function,Interface/Connection,Selection/Justification
+1,ESP32 Development Board,1,Main edge controller,GPIO/I2C/SPI/UART/Wi-Fi,Integrated Wi-Fi and sufficient processing/peripheral capability
+2,Temperature and Humidity Sensor,1,Environmental monitoring,Digital/I2C,Provides temperature and relative humidity measurements
+3,OLED Display,1,Local status and measurement display,I2C,Compact low-power local display
+4,RGB LED,1,Visual status indication,GPIO/PWM,Provides Normal/Warning/Critical indication
+5,Buzzer,1,Audible alert,GPIO/PWM,Provides local warning and critical alerts
+6,Door Status Sensor,1,Optional door monitoring,GPIO,Detects door-open/door-closed condition
+7,Resistors,As required,LED and signal conditioning,GPIO,Required for appropriate interface circuitry
+8,Breadboard/Prototype PCB,1,Prototype assembly,Electrical connections,Allows rapid hardware prototyping
+9,Jumper Wires,As required,Interconnection,GPIO/Power/GND,Required for prototype wiring
+10,Regulated Power Supply,1,Power the ESP32 and peripherals,Power,Provides stable regulated supply
+11,USB Cable,1,Programming and debugging,USB/UART,Used for firmware programming and serial debugging
