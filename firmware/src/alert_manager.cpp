@@ -1,5 +1,6 @@
 #include "alert_manager.h"
 #include "config.h"
+#include "condition_classifier.h"
 
 #include <Arduino.h>
 #include <Wire.h>
