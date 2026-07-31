@@ -37,6 +37,11 @@
 #define I2C_SDA_PIN 21
 #define I2C_SCL_PIN 22
 
+// OLED configuration
+#define OLED_I2C_ADDRESS 0x3C
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 64
+
 // SHT31 I2C address
 #define SHT31_I2C_ADDRESS 0x44
 
