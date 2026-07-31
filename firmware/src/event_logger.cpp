@@ -1,28 +1,56 @@
 #include "event_logger.h"
+
 #include <Arduino.h>
+#include <Preferences.h>
 
 /*
  * FleetGuard Event Logger
  *
- * Prototype implementation:
- * Events are currently written to the serial console.
+ * Events are stored in ESP32 NVS so that important events
+ * remain available after a power restart.
  *
- * Later, this module can be connected to ESP32 NVS/flash
- * for persistent non-volatile event storage.
+ * Prototype storage strategy:
+ * - Store the latest event
+ * - Store total event count
+ *
+ * Future production implementation may use:
+ * - Circular event buffer
+ * - External flash
+ * - SD card
+ * - Cloud synchronization
  */
+
+static Preferences eventStorage;
 
 static bool loggerInitialized = false;
 
 
+// ---------------------------------------------------------
+// Initialization
+// ---------------------------------------------------------
+
 bool eventLoggerBegin()
 {
+    if (!eventStorage.begin("events", false))
+    {
+        Serial.println("ERROR: Event storage initialization failed.");
+
+        loggerInitialized = false;
+
+        return false;
+    }
+
     loggerInitialized = true;
 
     Serial.println("Event Logger initialized.");
 
-    return loggerInitialized;
+    return true;
 }
 
+
+// ---------------------------------------------------------
+// Log Event
+// ---------------------------------------------------------
 
 void logEvent(EventType event)
 {
@@ -31,23 +59,46 @@ void logEvent(EventType event)
         return;
     }
 
-    Serial.print("[EVENT] ");
-    Serial.println(eventTypeToString(event));
+    const char* eventText =
+        eventTypeToString(event);
 
     /*
-     * Future implementation:
-     *
-     * Store the event in ESP32 NVS/flash.
-     *
-     * Example:
-     * - Timestamp
-     * - Event type
-     * - Temperature
-     * - Humidity
-     * - Device status
+     * Read current event count.
      */
+    uint32_t eventCount =
+        eventStorage.getUInt("count", 0);
+
+    eventCount++;
+
+    /*
+     * Store the latest event.
+     */
+    eventStorage.putString(
+        "last_event",
+        eventText
+    );
+
+    /*
+     * Store event count.
+     */
+    eventStorage.putUInt(
+        "count",
+        eventCount
+    );
+
+    /*
+     * Print event information for debugging.
+     */
+    Serial.print("[EVENT #");
+    Serial.print(eventCount);
+    Serial.print("] ");
+    Serial.println(eventText);
 }
 
+
+// ---------------------------------------------------------
+// Event Type to String
+// ---------------------------------------------------------
 
 const char* eventTypeToString(EventType event)
 {
