@@ -33,10 +33,17 @@ static bool sensorInitialized = false;
 
 bool sensorManagerBegin()
 {
-    // Initialize I2C bus
+    /*
+     * Initialize the ESP32 I2C bus.
+     *
+     * SDA = GPIO 21
+     * SCL = GPIO 22
+     */
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
-    // Initialize SHT31
+    /*
+     * Initialize SHT31 using the configured I2C address.
+     */
     if (!sht31.begin(SHT31_I2C_ADDRESS))
     {
         Serial.println("ERROR: SHT31 sensor not detected.");
@@ -60,7 +67,9 @@ bool sensorManagerBegin()
 
 bool sensorManagerRead(SensorData& data)
 {
-    // Default to invalid
+    /*
+     * Always start with an invalid data state.
+     */
     data.valid = false;
 
     if (!sensorInitialized)
@@ -70,14 +79,19 @@ bool sensorManagerRead(SensorData& data)
         return false;
     }
 
-    // Read temperature
+    /*
+     * Read temperature.
+     */
     float temperature = sht31.readTemperature();
 
-    // Read relative humidity
+    /*
+     * Read relative humidity.
+     */
     float humidity = sht31.readHumidity();
 
     /*
-     * SHT31 returns NAN if the reading fails.
+     * The SHT31 library returns NAN when a measurement
+     * cannot be obtained.
      */
     if (isnan(temperature) || isnan(humidity))
     {
@@ -86,19 +100,24 @@ bool sensorManagerRead(SensorData& data)
         return false;
     }
 
-    // Store readings
+    /*
+     * Store the sensor measurements.
+     */
     data.temperature = temperature;
     data.humidity = humidity;
 
-    // Validate readings
-    data.valid = validateSensorData(data);
-
-    if (!data.valid)
+    /*
+     * Validate the measurements before making them
+     * available to the condition classifier.
+     */
+    if (!validateSensorData(data))
     {
         Serial.println("ERROR: Sensor data outside valid range.");
 
         return false;
     }
+
+    data.valid = true;
 
     return true;
 }
@@ -111,7 +130,8 @@ bool sensorManagerRead(SensorData& data)
 bool validateSensorData(const SensorData& data)
 {
     /*
-     * Temperature engineering validation range.
+     * Validate temperature against the configured
+     * engineering limits.
      */
     if (data.temperature < MIN_VALID_TEMPERATURE ||
         data.temperature > MAX_VALID_TEMPERATURE)
@@ -120,7 +140,7 @@ bool validateSensorData(const SensorData& data)
     }
 
     /*
-     * Relative humidity must be between 0% and 100%.
+     * Validate relative humidity.
      */
     if (data.humidity < MIN_VALID_HUMIDITY ||
         data.humidity > MAX_VALID_HUMIDITY)
