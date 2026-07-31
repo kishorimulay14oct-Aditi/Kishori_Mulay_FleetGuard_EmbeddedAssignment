@@ -33,11 +33,12 @@
 #define MIN_VALID_HUMIDITY 0.0f
 #define MAX_VALID_HUMIDITY 100.0f
 
-// Hardware pins
-#define SENSOR_DATA_PIN 4
+// I2C pins for environmental sensor and OLED
+#define I2C_SDA_PIN 21
+#define I2C_SCL_PIN 22
 
-#define OLED_SDA_PIN 21
-#define OLED_SCL_PIN 22
+// SHT31 I2C address
+#define SHT31_I2C_ADDRESS 0x44
 
 #define LED_RED_PIN 25
 #define LED_GREEN_PIN 26
