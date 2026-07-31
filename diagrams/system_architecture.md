@@ -531,13 +531,4 @@ toward a scalable, secure, and production-oriented fleet monitoring
 solution.
 
 
----
 
-# STEP 3 — Commit the file
-
-Scroll down to **Commit changes**.
-
-Use this commit message:
-
-```text
-Add FleetGuard system architecture documentation
