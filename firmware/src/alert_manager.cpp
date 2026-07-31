@@ -1,21 +1,33 @@
 #include "alert_manager.h"
 #include "config.h"
+
 #include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 /*
  * FleetGuard Alert Manager
  *
- * Handles:
+ * Responsibilities:
+ * - OLED display
  * - RGB/status LED
  * - Buzzer
- * - Local display interface
- *
- * The OLED implementation is kept modular so that the exact
- * display library can be added after the final hardware is selected.
+ * - Local environmental status indication
  */
 
+static Adafruit_SSD1306 display(
+    OLED_WIDTH,
+    OLED_HEIGHT,
+    &Wire,
+    -1
+);
+
+static bool displayInitialized = false;
+
+
 // ---------------------------------------------------------
-// Internal helper functions
+// RGB LED
 // ---------------------------------------------------------
 
 static void setLed(bool red, bool green, bool blue)
@@ -25,14 +37,93 @@ static void setLed(bool red, bool green, bool blue)
     digitalWrite(LED_BLUE_PIN, blue ? HIGH : LOW);
 }
 
+
+// ---------------------------------------------------------
+// Buzzer
+// ---------------------------------------------------------
+
 static void buzzerOff()
 {
     digitalWrite(BUZZER_PIN, LOW);
 }
 
+
 static void buzzerOn()
 {
     digitalWrite(BUZZER_PIN, HIGH);
+}
+
+
+// ---------------------------------------------------------
+// OLED Display
+// ---------------------------------------------------------
+
+static void updateDisplay(
+    ConditionState state,
+    float temperature,
+    float humidity)
+{
+    if (!displayInitialized)
+    {
+        return;
+    }
+
+    display.clearDisplay();
+
+    display.setTextColor(SSD1306_WHITE);
+
+    // Title
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("FleetGuard");
+
+    // Temperature
+    display.setCursor(0, 16);
+    display.print("Temp: ");
+    display.print(temperature, 1);
+    display.println(" C");
+
+    // Humidity
+    display.setCursor(0, 28);
+    display.print("Hum:  ");
+    display.print(humidity, 1);
+    display.println(" %");
+
+    // Status
+    display.setCursor(0, 44);
+    display.print("Status: ");
+
+    display.println(conditionStateToString(state));
+
+    display.display();
+}
+
+
+static void displaySensorFault()
+{
+    if (!displayInitialized)
+    {
+        return;
+    }
+
+    display.clearDisplay();
+
+    display.setTextColor(SSD1306_WHITE);
+
+    display.setTextSize(1);
+
+    display.setCursor(0, 0);
+    display.println("FleetGuard");
+
+    display.setTextSize(2);
+
+    display.setCursor(0, 25);
+    display.println("SENSOR");
+
+    display.setCursor(0, 45);
+    display.println("FAULT");
+
+    display.display();
 }
 
 
@@ -42,15 +133,46 @@ static void buzzerOn()
 
 bool alertManagerBegin()
 {
+    // RGB LED
     pinMode(LED_RED_PIN, OUTPUT);
     pinMode(LED_GREEN_PIN, OUTPUT);
     pinMode(LED_BLUE_PIN, OUTPUT);
 
+    // Buzzer
     pinMode(BUZZER_PIN, OUTPUT);
 
-    // Start in a safe inactive state
+    // Safe initial state
     setLed(false, false, false);
     buzzerOff();
+
+    // Initialize OLED
+    if (!display.begin(
+            SSD1306_SWITCHCAPVCC,
+            OLED_I2C_ADDRESS))
+    {
+        Serial.println("WARNING: OLED not detected.");
+
+        displayInitialized = false;
+    }
+    else
+    {
+        displayInitialized = true;
+
+        display.clearDisplay();
+
+        display.setTextColor(SSD1306_WHITE);
+
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+
+        display.println("FleetGuard");
+        display.println();
+        display.println("Initializing...");
+
+        display.display();
+
+        Serial.println("OLED initialized.");
+    }
 
     Serial.println("Alert Manager initialized.");
 
@@ -59,7 +181,7 @@ bool alertManagerBegin()
 
 
 // ---------------------------------------------------------
-// Alert Update
+// Update Alerts
 // ---------------------------------------------------------
 
 void updateAlerts(
@@ -71,10 +193,10 @@ void updateAlerts(
     {
         case ConditionState::NORMAL:
 
-            // Green LED
+            // Green
             setLed(false, true, false);
 
-            // No audible alert
+            // No buzzer
             buzzerOff();
 
             Serial.println("STATUS: NORMAL");
@@ -87,12 +209,7 @@ void updateAlerts(
             // Yellow = Red + Green
             setLed(true, true, false);
 
-            /*
-             * Simple demonstration alert.
-             *
-             * In the final implementation this can be replaced
-             * with a non-blocking periodic buzzer pattern.
-             */
+            // Warning buzzer
             buzzerOn();
 
             Serial.println("STATUS: WARNING");
@@ -102,10 +219,10 @@ void updateAlerts(
 
         case ConditionState::CRITICAL:
 
-            // Red LED
+            // Red
             setLed(true, false, false);
 
-            // Critical audible alert
+            // Critical buzzer
             buzzerOn();
 
             Serial.println("STATUS: CRITICAL");
@@ -113,19 +230,12 @@ void updateAlerts(
             break;
     }
 
-    /*
-     * Temporary serial display.
-     *
-     * The actual OLED implementation will be connected here
-     * after the final OLED library and model are selected.
-     */
-    Serial.print("Temperature: ");
-    Serial.print(temperature);
-    Serial.println(" C");
-
-    Serial.print("Humidity: ");
-    Serial.print(humidity);
-    Serial.println(" %");
+    // Update OLED
+    updateDisplay(
+        state,
+        temperature,
+        humidity
+    );
 }
 
 
@@ -135,13 +245,14 @@ void updateAlerts(
 
 void showSensorFault()
 {
-    /*
-     * Fault indication:
-     * Red LED + buzzer.
-     */
+    // Red LED
     setLed(true, false, false);
 
+    // Buzzer
     buzzerOn();
+
+    // OLED
+    displaySensorFault();
 
     Serial.println("STATUS: SENSOR FAULT");
 }
